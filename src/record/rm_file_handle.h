@@ -18,7 +18,7 @@ struct RmPageHandle {
     char *bitmap;               // page->data的第二部分，指针指向首地址，长度为file_hdr->bitmap_size
     char *slots;  // page->data的第三部分，指针指向首地址，每个slot的长度为file_hdr->record_size
 
-    RmPageHandle(const RmFileHdr *fhdr_, Page *page_) : file_hdr(fhdr_), page(page_) {
+    RmPageHandle(const RmFileHdr *fhdr_, Page *page_) : file_hdr(fhdr_), page(page_) {//设置了三块内容的起始地址，没有初始化初始值
         page_hdr = reinterpret_cast<RmPageHdr *>(page->GetData() + page->OFFSET_PAGE_HDR);
         bitmap = page->GetData() + sizeof(RmPageHdr) + page->OFFSET_PAGE_HDR;
         slots = bitmap + file_hdr->bitmap_size;

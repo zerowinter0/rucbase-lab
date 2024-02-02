@@ -38,7 +38,7 @@ struct rid_hash_t {
 struct rid_equal_t {
     bool operator()(const Rid &x, const Rid &y) const { return x.page_no == y.page_no && x.slot_no == y.slot_no; }
 };
-
+std::unordered_map<Rid, std::string, rid_hash_t, rid_equal_t> tmp;
 void check_equal(const RmFileHandle *file_handle,
                  const std::unordered_map<Rid, std::string, rid_hash_t, rid_equal_t> &mock) {
     char *result = new char[BUFFER_LENGTH];
@@ -127,7 +127,6 @@ TEST(RecordManagerTest, SimpleTest) {
     // test pages
     rm_manager->create_file(filename, record_size);
     auto file_handle = rm_manager->open_file(filename);
-
     char write_buf[PAGE_SIZE];
     size_t add_cnt = 0;
     size_t upd_cnt = 0;
