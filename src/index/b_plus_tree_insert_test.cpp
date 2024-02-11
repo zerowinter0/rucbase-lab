@@ -220,6 +220,7 @@ TEST_F(BPlusTreeTests, InsertTest) {
     std::vector<int64_t> keys;
     for (int64_t key = 1; key <= scale; key++) {
         keys.push_back(key);
+       
     }
 
     const char *index_key;
@@ -230,15 +231,14 @@ TEST_F(BPlusTreeTests, InsertTest) {
         index_key = (const char *)&key;
         bool insert_ret = ih_->insert_entry(index_key, rid, txn_.get());  // 调用Insert
         ASSERT_EQ(insert_ret, true);
-
         Draw(buffer_pool_manager_.get(), "insert" + std::to_string(key) + ".dot");
     }
-
     std::vector<Rid> rids;
     for (auto key : keys) {
         rids.clear();
         index_key = (const char *)&key;
-        ih_->GetValue(index_key, &rids, txn_.get());  // 调用GetValue
+        bool res=ih_->GetValue(index_key, &rids, txn_.get());  // 调用GetValue
+        assert(res);
         EXPECT_EQ(rids.size(), 1);
 
         int32_t value = key & 0xFFFFFFFF;
@@ -284,7 +284,6 @@ TEST_F(BPlusTreeTests, LargeScaleTest) {
         bool insert_ret = ih_->insert_entry(index_key, rid, txn_.get());  // 调用Insert
         ASSERT_EQ(insert_ret, true);
     }
-
     // test GetValue
     std::vector<Rid> rids;
     for (auto key : keys) {
@@ -292,7 +291,6 @@ TEST_F(BPlusTreeTests, LargeScaleTest) {
         index_key = (const char *)&key;
         ih_->GetValue(index_key, &rids, txn_.get());  // 调用GetValue
         EXPECT_EQ(rids.size(), 1);
-
         int64_t value = key & 0xFFFFFFFF;
         EXPECT_EQ(rids[0].slot_no, value);
     }

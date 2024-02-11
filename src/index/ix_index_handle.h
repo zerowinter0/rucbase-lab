@@ -47,6 +47,9 @@ class IxIndexHandle {
     bool Coalesce(IxNodeHandle **neighbor_node, IxNodeHandle **node, IxNodeHandle **parent, int index,
                   Transaction *transaction);
 
+    void check_whole_tree();
+    void print_node(int page_no);
+    bool correct_whole_tree();
     // 辅助函数，lab3执行层将使用
     Iid lower_bound(const char *key);
 
