@@ -1,7 +1,8 @@
 #include "ix_index_handle.h"
 #include <queue>
 #include "ix_scan.h"
-
+#define Tree_level_lock 1
+//#define Page_level_lock 1
 IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
     : disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager), fd_(fd) {
     // init file_hdr_
@@ -68,12 +69,51 @@ IxNodeHandle *IxIndexHandle::FindLeafPage(const char *key, Operation operation, 
     // 2. 从根节点开始不断向下查找目标key
     // 3. 找到包含该key值的叶子结点停止查找，并返回叶子节点
     auto node=FetchNode(file_hdr_.root_page);
+    #ifdef Page_level_lock
+    std::queue<std::mutex*> lock_queue;
+    if(operation==Operation::FIND){
+        while(!read_map[node->GetPageNo()]->try_lock()){};
+    }
+    else{
+         while(!write_map[node->GetPageNo()]->try_lock()){};
+         lock_queue.push(write_map[node->GetPageNo()]);
+    }
+    #endif
     auto node_page=file_hdr_.root_page;
     while(!node->IsLeafPage()){
         node_page=node->InternalLookup(key);
         if(node_page==-1)return nullptr;
+        #ifdef Page_level_lock
+        if(operation==Operation::FIND){
+            read_map[node->GetPageNo()]->unlock();
+        }else if(operation==Operation::INSERT){
+            if(node->GetSize()<node->GetMaxSize()-1){
+                while(!lock_queue.empty()){
+                    lock_queue.front()->unlock();
+                    lock_queue.pop();
+                }
+            }
+        }
+        else{
+            if(node->GetSize()>node->GetMinSize()){
+                while(!lock_queue.empty()){
+                    lock_queue.front()->unlock();
+                    lock_queue.pop();
+                }
+            }
+        }
+        #endif
         buffer_pool_manager_->UnpinPage(node->GetPageId(),false);
         node=FetchNode(node_page);
+        #ifdef Page_level_lock
+        if(operation==Operation::FIND){
+            while(!read_map[node->GetPageNo()]->try_lock()){};
+        }
+        else{
+            while(!write_map[node->GetPageNo()]->try_lock()){};
+            lock_queue.push(write_map[node->GetPageNo()]);
+        }
+        #endif
     }
     return node;
 }
@@ -118,10 +158,14 @@ bool IxIndexHandle::insert_entry(const char *key, const Rid &value, Transaction 
     // 2. 在该叶子节点中插入键值对
     // 3. 如果结点已满，分裂结点，并把新结点的相关信息插入父节点
     // 提示：记得unpin page；若当前叶子节点是最右叶子节点，则需要更新file_hdr_.last_leaf；记得处理并发的上锁
+    while(!root_latch_.try_lock()){}
     std::vector<Rid> v;
     bool res=GetValue(key,&v,transaction);
     if(res){
-        assert(0);
+        //assert(0);
+        #ifdef Tree_level_lock
+        root_latch_.unlock();
+        #endif
         return false;
     }
     auto target_node=FindLeafPage(key,Operation::INSERT,transaction);
@@ -139,7 +183,9 @@ bool IxIndexHandle::insert_entry(const char *key, const Rid &value, Transaction 
         assert(0);
         return false;
     }
-    //check_whole_tree();
+    #ifdef Tree_level_lock
+    root_latch_.unlock();
+    #endif
     return true;
 }
 
@@ -236,14 +282,16 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
     // 2. 在该叶子结点中删除键值对
     // 3. 如果删除成功需要调用CoalesceOrRedistribute来进行合并或重分配操作，并根据函数返回结果判断是否有结点需要删除
     // 4. 如果需要并发，并且需要删除叶子结点，则需要在事务的delete_page_set中添加删除结点的对应页面；记得处理并发的上锁
+    while(!root_latch_.try_lock()){}
     std::vector<Rid> v;
     bool res=GetValue(key,&v,transaction);
     if(!res){
-        check_whole_tree();
-        assert(0);
-    }
-    if(!correct_whole_tree()){
-        assert(0);
+        //check_whole_tree();
+        //assert(0);
+        #ifdef Tree_level_lock
+        root_latch_.unlock();
+        #endif
+        return false;
     }
     auto target_node=FindLeafPage(key,Operation::DELETE,transaction);
     if(!target_node->Remove(key))assert(0);
@@ -253,6 +301,9 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
     }
     res=GetValue(key,&v,transaction);
     if(res)assert(0);
+    #ifdef Tree_level_lock
+    root_latch_.unlock();
+    #endif
     return true;
 }
 
@@ -459,6 +510,14 @@ IxNodeHandle *IxIndexHandle::CreateNode() {
     Page *page = buffer_pool_manager_->NewPage(&new_page_id);
     // 注意，和Record的free_page定义不同，此处【不能】加上：file_hdr_.first_free_page_no = page->GetPageId().page_no
     IxNodeHandle *node = new IxNodeHandle(&file_hdr_, page);
+    #ifdef Page_level_lock
+    if(read_map.find(node->GetPageNo())==read_map.end()){
+        read_map[node->GetPageNo()]=new std::mutex;
+    }
+    if(write_map.find(node->GetPageNo())==write_map.end()){
+        write_map[node->GetPageNo()]=new std::mutex;
+    }
+    #endif
     return node;
 }
 
