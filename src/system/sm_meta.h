@@ -41,6 +41,9 @@ struct TabMeta {
      */
     bool is_col(const std::string &col_name) const {
         // lab3 task1 Todo
+        for(auto i:cols){
+            if(i.name==col_name)return true;
+        }
         return false;
         // lab3 task1 Todo End
     }
@@ -53,6 +56,9 @@ struct TabMeta {
     std::vector<ColMeta>::iterator get_col(const std::string &col_name) {
         // lab3 task1 Todo
         std::vector<ColMeta>::iterator it;
+        for(it=cols.begin();it!=cols.end();it++){
+            if(it->name==col_name)return it;
+        }
         return it;
         // lab3 task1 Todo End
     }

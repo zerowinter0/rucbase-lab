@@ -3,7 +3,7 @@
 #include "ix_defs.h"
 #include "ix_node_handle.h"
 #include "transaction/transaction.h"
-
+#include <shared_mutex>
 enum class Operation { FIND = 0, INSERT, DELETE };  // 三种操作：查找、插入、删除
 
 /**
@@ -19,15 +19,14 @@ class IxIndexHandle {
     int fd_;
     IxFileHdr file_hdr_;  // 存了root_page，但root_page初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
     std::mutex root_latch_;  // 用于索引并发（请自行选择并发粒度在 Tree级 或 Page级 ）
-    std::unordered_map<int,std::mutex *> write_map;
-    std::unordered_map<int,std::mutex *> read_map;
+    std::unordered_map<page_id_t,std::shared_mutex*> lock_map;
    public:
     IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd);
 
     // for search
     bool GetValue(const char *key, std::vector<Rid> *result, Transaction *transaction);
 
-    IxNodeHandle *FindLeafPage(const char *key, Operation operation, Transaction *transaction);
+    std::pair<IxNodeHandle *,std::shared_mutex*>FindLeafPage(const char *key, Operation operation, Transaction *transaction);
 
     // for insert
     bool insert_entry(const char *key, const Rid &value, Transaction *transaction);

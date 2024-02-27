@@ -337,7 +337,6 @@ TEST_F(BPlusTreeConcurrentTest, MixScaleTest) {
     // 这里调用了insert_entry，并且用thread_num个进程并发插入（包括并发查找）
     LaunchParallelTest(thread_num, InsertHelper, ih_.get(), keys);
     printf("Insert key 1~%ld finished\n", scale);
-
     // keys to Delete
     std::vector<int64_t> delete_keys;
     for (int64_t key = 1; key <= delete_scale; key++) {
