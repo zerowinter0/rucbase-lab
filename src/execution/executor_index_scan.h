@@ -27,6 +27,29 @@ class IndexScanExecutor : public AbstractExecutor {
                       Context *context) {
         // lab3 task2 todo
         // 参考seqscan作法,实现indexscan构造方法
+        sm_manager_ = sm_manager;
+        tab_name_ = std::move(tab_name);
+        conds_ = std::move(conds);
+        TabMeta &tab = sm_manager_->db_.get_table(tab_name_);
+        fh_ = sm_manager_->fhs_.at(tab_name_).get();
+        cols_ = tab.cols;
+        len_ = cols_.back().offset + cols_.back().len;
+        context_ = context;
+        std::map<CompOp, CompOp> swap_op = {
+            {OP_EQ, OP_EQ}, {OP_NE, OP_NE}, {OP_LT, OP_GT}, {OP_GT, OP_LT}, {OP_LE, OP_GE}, {OP_GE, OP_LE},
+        };
+        
+        for (auto &cond : conds_) {
+            if (cond.lhs_col.tab_name != tab_name_) {
+                // lhs is on other table, now rhs must be on this table
+                assert(!cond.is_rhs_val && cond.rhs_col.tab_name == tab_name_);
+                // swap lhs and rhs
+                std::swap(cond.lhs_col, cond.rhs_col);
+                cond.op = swap_op.at(cond.op);
+            }
+        }
+        fed_conds_ = conds_;
+        index_no_=index_no;
         // lab3 task2 todo
     }
 
@@ -47,23 +70,26 @@ class IndexScanExecutor : public AbstractExecutor {
                     lower = ih->lower_bound(rhs_key);
                     upper = ih->upper_bound(rhs_key);
                 }
-
-                // lab3 task2 todo
-                /**
-                 * else if(cond.op == ?){
-                 *
-                 * }else if(){
-                 * ...
-                 * }else if(){
-                 * ...
-                 * }
-                 * ...
-                 * else{
-                 *  throw InternalError("Unexpected op type");
-                 * }
-                 *
-                 *
-                 */
+                //lab3 task2 todo
+                else if(cond.op==OP_GE){
+                    lower=ih->lower_bound(rhs_key);
+                    upper=ih->leaf_end();
+                }
+                else if(cond.op==OP_GT){
+                    lower=ih->upper_bound(rhs_key);
+                    upper=ih->leaf_end();
+                }
+                else if(cond.op==OP_LE){
+                    upper=ih->upper_bound(rhs_key);
+                    lower=ih->leaf_begin();
+                }
+                else if(cond.op==OP_LT){
+                    upper=ih->lower_bound(rhs_key);
+                    lower=ih->leaf_begin();
+                }
+                else{
+                    throw InternalError("Unexpected op type");
+                }
                 // 利用cond 进行索引扫描
                 // lab3 task2 todo end
                 break;
@@ -86,6 +112,15 @@ class IndexScanExecutor : public AbstractExecutor {
         assert(!is_end());
         // lab3 task2 todo
         // 扫描到下一个满足条件的记录,赋rid_,中止循环
+        scan_->next();
+        while(!scan_->is_end()){
+            rid_ = scan_->rid();
+            auto rec = fh_->get_record(rid_, context_);
+            if (eval_conds(cols_, fed_conds_, rec.get())) {
+                break;
+            }
+            scan_->next();
+        }
         // lab3 task2 todo end
     }
 
@@ -105,6 +140,10 @@ class IndexScanExecutor : public AbstractExecutor {
         for (auto &cond : fed_conds_) {
             // lab3 task2 todo
             // 参考seqscan
+            if (!cond.is_rhs_val && cond.rhs_col.tab_name != tab_name_) {
+                cond.is_rhs_val = true;
+                cond.rhs_val = feed_dict.at(cond.rhs_col);
+            }
             // lab3 task2 todo end
         }
         check_runtime_conds();

@@ -30,13 +30,23 @@ class UpdateExecutor : public AbstractExecutor {
     std::unique_ptr<RmRecord> Next() override {
         // Get all necessary index files
         std::vector<IxIndexHandle *> ihs(tab_.cols.size(), nullptr);
+        std::vector<std::pair<bool,Value>> values(tab_.cols.size());
+        for(auto i:values)i.first=false;
         for (auto &set_clause : set_clauses_) {
             auto lhs_col = tab_.get_col(set_clause.lhs.col_name);
             if (lhs_col->index) {
                 size_t lhs_col_idx = lhs_col - tab_.cols.begin();
                 // lab3 task3 Todo
                 // 获取需要的索引句柄,填充vector ihs
+                ihs[lhs_col_idx]=sm_manager_->ihs_.at(sm_manager_->get_ix_manager()->get_index_name(tab_name_,lhs_col_idx)).get();
                 // lab3 task3 Todo end
+            }
+            for(int i=0;i<tab_.cols.size();i++){
+                if(set_clause.lhs.col_name==tab_.cols[i].name){
+                    values[i].first=true;
+                    values[i].second=set_clause.rhs;
+                    break;
+                }
             }
         }
         // Update each rid from record file and index file
@@ -44,6 +54,10 @@ class UpdateExecutor : public AbstractExecutor {
             auto rec = fh_->get_record(rid, context_);
             // lab3 task3 Todo
             // Remove old entry from index
+            for(int i=0;i<tab_.cols.size();i++){
+                if(!ihs[i])continue;
+                ihs[i]->delete_entry(rec->data+tab_.cols[i].offset,nullptr);
+            }
             // lab3 task3 Todo end
 
             // record a update operation into the transaction
@@ -52,10 +66,19 @@ class UpdateExecutor : public AbstractExecutor {
 
             // lab3 task3 Todo
             // Update record in record file
+            for(int i=0;i<tab_.cols.size();i++){
+                if(!values[i].first)continue;
+                memcpy(rec->data+tab_.cols[i].offset,values[i].second.raw->data,tab_.cols[i].len);
+            }
+            fh_->update_record(rid,rec->data,context_);
             // lab3 task3 Todo end
 
             // lab3 task3 Todo
             // Insert new entry into index
+            for(int i=0;i<tab_.cols.size();i++){
+                if(!ihs[i])continue;
+                ihs[i]->insert_entry(rec->data+tab_.cols[i].offset,rid,nullptr);
+            }
             // lab3 task3 Todo end
         }
         return nullptr;

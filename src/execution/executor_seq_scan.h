@@ -64,6 +64,9 @@ class SeqScanExecutor : public AbstractExecutor {
                 auto rec = fh_->get_record(rid_, context_);  // TableHeap->GetTuple() 当前扫描到的记录
                 // lab3 task2 todo
                 // 利用eval_conds判断是否当前记录(rec.get())满足谓词条件
+                if(eval_conds(cols_,fed_conds_,rec.get())){
+                    break;
+                }
                 // 满足则中止循环
                 // lab3 task2 todo end
             } catch (RecordNotFoundError &e) {
@@ -82,6 +85,11 @@ class SeqScanExecutor : public AbstractExecutor {
             // 获取当前记录(参考beginTuple())赋给算子成员rid_
             // 利用eval_conds判断是否当前记录(rec.get())满足谓词条件
             // 满足则中止循环
+            rid_ = scan_->rid();
+            auto rec = fh_->get_record(rid_, context_);
+            if(eval_conds(cols_,fed_conds_,rec.get())){
+                break;
+            }
             // lab3 task2 todo End
         }
     }
@@ -95,6 +103,8 @@ class SeqScanExecutor : public AbstractExecutor {
     std::unique_ptr<RmRecord> Next() override {
         // lab3 task2 todo
         // 利用fh_得到记录record
+        if(is_end())return nullptr;
+        return fh_->get_record(rid_,context_);
         // lab3 task2 todo end
     }
 

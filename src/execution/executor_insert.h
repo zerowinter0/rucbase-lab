@@ -33,8 +33,25 @@ class InsertExecutor : public AbstractExecutor {
         // Make record buffer
         // Insert into record file
         // Insert into index
+        int tot_size=0;
+        for(auto i:tab_.cols){
+            tot_size+=i.len;
+        }
+        char *data=(char *)malloc(tot_size);
+        for(int i=0;i<values_.size();i++){
+            memcpy(data+tab_.cols[i].offset,values_[i].raw->data,values_[i].raw->size);
+        }
+        std::unique_ptr<RmRecord> rmRecord(new RmRecord(tot_size,data));
+        auto ix_manager=sm_manager_->get_ix_manager();
+        rid_=fh_->insert_record(data,context_);
+        for(int i=0;i<tab_.cols.size();i++){
+            if(tab_.cols[i].index){
+                auto ix_file_handle=sm_manager_->ihs_.at(ix_manager->get_index_name(tab_name_,i)).get();
+                ix_file_handle->insert_entry(values_[i].raw->data,rid_,nullptr);
+            }
+        }
         // lab3 task3 Todo end
-        return nullptr;
+        return rmRecord;
     }
     Rid &rid() override { return rid_; }
 };

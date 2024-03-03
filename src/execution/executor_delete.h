@@ -32,6 +32,7 @@ class DeleteExecutor : public AbstractExecutor {
             if (tab_.cols[col_i].index) {
                 // lab3 task3 Todo
                 // 获取需要的索引句柄,填充vector ihs
+                ihs[col_i]=sm_manager_->ihs_.at(sm_manager_->get_ix_manager()->get_index_name(tab_name_,col_i)).get();
                 // lab3 task3 Todo end
             }
         }
@@ -41,6 +42,11 @@ class DeleteExecutor : public AbstractExecutor {
             // lab3 task3 Todo
             // Delete from index file
             // Delete from record file
+            for(int i=0;i<tab_.cols.size();i++){
+                if(!ihs[i])continue;
+                ihs[i]->delete_entry(rec->data+tab_.cols[i].offset,nullptr);
+            }
+            fh_->delete_record(rid,context_);
             // lab3 task3 Todo end
 
             // record a delete operation into the transaction

@@ -26,6 +26,7 @@ bool IxIndexHandle::correct_whole_tree(){
             }
             q.push(node->get_rid(i)->page_no);
         }
+        buffer_pool_manager_->UnpinPage(node->GetPageId(),false);
     }
     return true;
 }
@@ -391,14 +392,18 @@ bool IxIndexHandle::CoalesceOrRedistribute(IxNodeHandle *node, Transaction *tran
             buffer_pool_manager_->UnpinPage(father_node->GetPageId(),false);
             return false;
         }
-        buffer_pool_manager_->UnpinPage(front_node->GetPageId(),false);
+        
         if(pos==father_node->GetSize()-1){
             bool res=Coalesce(&front_node,&node,&father_node,1,transaction);
-            buffer_pool_manager_->UnpinPage(father_node->GetPageId(),false);
+            buffer_pool_manager_->UnpinPage(front_node->GetPageId(),false);
             if(res){
                 CoalesceOrRedistribute(father_node,transaction);
             }
+            buffer_pool_manager_->UnpinPage(father_node->GetPageId(),false);
             return res;
+        }
+        else{
+            buffer_pool_manager_->UnpinPage(front_node->GetPageId(),false);
         }
     }
     auto behind_node=FetchNode(father_node->get_rid(pos+1)->page_no);

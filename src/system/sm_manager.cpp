@@ -17,6 +17,32 @@ bool SmManager::is_dir(const std::string &db_name) {
 void SmManager::create_db(const std::string &db_name) {
     // lab3 task1 Todo
     // 利用*inx命令创建目录作为数据库
+    if (is_dir(db_name)) {
+        throw DatabaseExistsError(db_name);
+    }
+    // Create a subdirectory for the database
+    std::string cmd = "mkdir " + db_name;
+    if (system(cmd.c_str()) < 0) {  // 创建一个名为db_name的目录
+        throw UnixError();
+    }
+    if (chdir(db_name.c_str()) < 0) {  // 进入名为db_name的目录
+        throw UnixError();
+    }
+    // Create the system catalogs
+    DbMeta *new_db = new DbMeta();
+    new_db->name_ = db_name;
+    
+    // 注意，此处ofstream会在当前目录创建(如果没有此文件先创建)和打开一个名为DB_META_NAME的文件
+    std::ofstream ofs(DB_META_NAME);
+
+    // 将new_db中的信息，按照定义好的operator<<操作符，写入到ofs打开的DB_META_NAME文件中
+    ofs << *new_db;  // 注意：此处重载了操作符<<
+    delete new_db;
+
+    // cd back to root dir
+    if (chdir("..") < 0) {
+        throw UnixError();
+    }
     // lab3 task1 Todo End
 }
 
@@ -65,6 +91,24 @@ void SmManager::close_db() {
     // 清理db_
     // 关闭rm_manager_ ix_manager_文件
     // 清理fhs_, ihs_
+
+    std::ofstream ofs(DB_META_NAME);
+    ofs<<db_;
+    db_.name_.clear();
+    db_.tabs_.clear();
+    // Close all record files
+    for (auto &entry : fhs_) {
+        rm_manager_->close_file(entry.second.get());
+    }
+	fhs_.clear();
+	// Close all index files
+    for(auto &entry:ihs_){
+        ix_manager_->close_index(entry.second.get());
+    }
+	ihs_.clear();
+    if (chdir("..") < 0) {
+        throw UnixError();
+    }
     // lab3 task1 Todo End
 }
 
@@ -129,6 +173,23 @@ void SmManager::drop_table(const std::string &tab_name, Context *context) {
     // Find table index in db_ meta
     // Close & destroy record file
     // Close & destroy index file
+    TabMeta &tab = db_.get_table(tab_name);
+    rm_manager_->close_file(fhs_[tab_name].get());
+    rm_manager_->destroy_file(tab_name);
+    int cnt=0;
+    for(auto col=tab.cols.begin();col!=tab.cols.end();col++){
+        if(col->index){
+            int col_idx=cnt;
+            const std::string &col_name=ix_manager_->get_index_name(tab_name,col_idx);
+            auto target=ihs_[col_name].get();
+            ix_manager_->close_index(target);
+            ix_manager_->destroy_index(tab_name,col_idx);
+            ihs_.erase(col_name);
+        }
+        cnt++;
+    }
+    db_.tabs_.erase(tab_name);
+    fhs_.erase(tab_name);
     // lab3 task1 Todo End
 }
 

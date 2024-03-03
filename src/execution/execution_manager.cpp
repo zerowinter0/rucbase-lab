@@ -97,6 +97,12 @@ void QlManager::insert_into(const std::string &tab_name, std::vector<Value> valu
     // lab3 task3 Todo
     // make InsertExecutor
     // call InsertExecutor.Next()
+    TabMeta &tab = sm_manager_->db_.get_table(tab_name);
+    for(int i=0;i<values.size();i++){
+        values[i].init_raw(tab.cols[i].len);
+    }
+    std::unique_ptr<AbstractExecutor> insertExecutor(new InsertExecutor(sm_manager_,tab_name,values,context));
+    insertExecutor->Next();
     // lab3 task3 Todo end
 }
 
@@ -110,6 +116,13 @@ void QlManager::delete_from(const std::string &tab_name, std::vector<Condition> 
     // lab3 task3 Todo
     // 根据get_indexNo判断conds上有无索引
     // 创建合适的scan executor(有索引优先用索引)
+    int index_no = get_indexNo(tab_name,conds);
+    if(index_no>=0){
+        scanExecutor=std::make_unique<IndexScanExecutor>(sm_manager_,tab_name,conds,index_no,context);
+    }
+    else{
+        scanExecutor=std::make_unique<SeqScanExecutor>(sm_manager_,tab_name,conds,context);
+    }
     // lab3 task3 Todo end
 
     for (scanExecutor->beginTuple(); !scanExecutor->is_end(); scanExecutor->nextTuple()) {
@@ -119,6 +132,8 @@ void QlManager::delete_from(const std::string &tab_name, std::vector<Condition> 
     // lab3 task3 Todo
     // make deleteExecutor
     // call deleteExecutor.Next()
+    auto deleteExecutor=new DeleteExecutor(sm_manager_,tab_name,conds,rids,context);
+    deleteExecutor->Next();
     // lab3 task3 Todo end
 }
 
@@ -144,12 +159,25 @@ void QlManager::update_set(const std::string &tab_name, std::vector<SetClause> s
     // 将rid存入rids
     // make updateExecutor
     // call updateExecutor.Next()
+    std::unique_ptr<AbstractExecutor> scanExecutor;
+    int index_no = get_indexNo(tab_name,conds);
+    if(index_no>=0){
+        scanExecutor=std::make_unique<IndexScanExecutor>(sm_manager_,tab_name,conds,index_no,context);
+    }
+    else{
+        scanExecutor=std::make_unique<SeqScanExecutor>(sm_manager_,tab_name,conds,context);
+    }
+    for (scanExecutor->beginTuple(); !scanExecutor->is_end(); scanExecutor->nextTuple()) {
+        rids.push_back(scanExecutor->rid());
+    }
+    auto updateExecutor=new UpdateExecutor(sm_manager_,tab_name,set_clauses,conds,rids,context);
+    updateExecutor->Next();
     // lab3 task3 Todo end
 }
 
 /**
  * @brief 表算子条件谓词生成
- *
+ * @details 返回conds中所有只需要用tab_names中包含的表的cond所组成的新conds，并把原conds中的这些cond删除
  * @param conds 条件
  * @param tab_names 表名
  * @return std::vector<Condition>
@@ -197,23 +225,39 @@ void QlManager::select_from(std::vector<TabCol> sel_cols, const std::vector<std:
     // Parse where clause
     conds = check_where_clause(tab_names, conds);
     // Scan table , 生成表算子列表tab_nodes
-    std::vector<std::unique_ptr<AbstractExecutor>> table_scan_executors(tab_names.size());
+    std::vector<std::unique_ptr<AbstractExecutor>> table_scan_executors;
     for (size_t i = 0; i < tab_names.size(); i++) {
         auto curr_conds = pop_conds(conds, {tab_names.begin(), tab_names.begin() + i + 1});
         int index_no = get_indexNo(tab_names[i], curr_conds);
         // lab3 task2 Todo
         // 根据get_indexNo判断conds上有无索引
         // 创建合适的scan executor(有索引优先用索引)存入table_scan_executors
+        if(index_no!=-1){
+            std::unique_ptr<AbstractExecutor> ptr(new IndexScanExecutor(sm_manager_,tab_names[i],curr_conds,index_no,context));
+            table_scan_executors.push_back(std::move(ptr));
+        }
+        else{
+            std::unique_ptr<AbstractExecutor> ptr(new SeqScanExecutor(sm_manager_,tab_names[i],curr_conds,context));
+            table_scan_executors.push_back(std::move(ptr));
+        }
         // lab3 task2 Todo end
     }
     assert(conds.empty());
-
     std::unique_ptr<AbstractExecutor> executorTreeRoot = std::move(table_scan_executors.back());
-
     // lab3 task2 Todo
     // 构建算子二叉树
     // 逆序遍历tab_nodes为左节点, 现query_plan为右节点,生成joinNode作为新query_plan 根节点
     // 生成query_plan tree完毕后, 根节点转换成投影算子
+    table_scan_executors.pop_back();
+    while(!table_scan_executors.empty()){
+        std::unique_ptr<AbstractExecutor> left_node=std::move(table_scan_executors.back());
+        auto tmp=new NestedLoopJoinExecutor(std::move(left_node),std::move(executorTreeRoot));
+        std::unique_ptr<AbstractExecutor> new_root(tmp);
+        executorTreeRoot=std::move(new_root);
+        table_scan_executors.pop_back();
+    }
+    std::unique_ptr<AbstractExecutor> new_root(new ProjectionExecutor(std::move(executorTreeRoot),sel_cols));
+    executorTreeRoot=std::move(new_root);
     // lab3 task2 Todo End
 
     // Column titles
@@ -253,4 +297,5 @@ void QlManager::select_from(std::vector<TabCol> sel_cols, const std::vector<std:
     rec_printer.print_separator(context);
     // Print record count
     RecordPrinter::print_record_count(num_rec, context);
+    
 }
