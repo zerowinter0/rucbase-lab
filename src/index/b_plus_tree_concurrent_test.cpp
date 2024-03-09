@@ -286,7 +286,7 @@ TEST_F(BPlusTreeConcurrentTest, InsertScaleTest) {
 
     assert(order > 2 && order <= ih_->file_hdr_.btree_order);
     ih_->file_hdr_.btree_order = order;
-
+    
     // keys to Insert
     std::vector<int64_t> keys;
     for (int64_t key = 1; key <= scale; key++) {

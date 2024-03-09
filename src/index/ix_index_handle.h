@@ -18,7 +18,7 @@ class IxIndexHandle {
     BufferPoolManager *buffer_pool_manager_;
     int fd_;
     IxFileHdr file_hdr_;  // 存了root_page，但root_page初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
-    std::mutex root_latch_;  // 用于索引并发（请自行选择并发粒度在 Tree级 或 Page级 ）
+    std::shared_mutex root_latch_;  // 用于索引并发（请自行选择并发粒度在 Tree级 或 Page级 ）
     std::unordered_map<page_id_t,std::shared_mutex*> lock_map;
    public:
     IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd);

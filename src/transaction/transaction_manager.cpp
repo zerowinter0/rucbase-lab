@@ -16,7 +16,11 @@ Transaction * TransactionManager::Begin(Transaction *txn, LogManager *log_manage
     // 2. 如果为空指针，创建新事务
     // 3. 把开始事务加入到全局事务表中
     // 4. 返回当前事务指针
-
+    if(!txn){
+        txn=new Transaction(GetNextTxnId());
+    }
+    next_txn_id_++;
+    txn_map[txn->GetTransactionId()]=txn;
     return txn;
 }
 
