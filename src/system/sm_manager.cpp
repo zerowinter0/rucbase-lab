@@ -174,6 +174,7 @@ void SmManager::drop_table(const std::string &tab_name, Context *context) {
     // Close & destroy record file
     // Close & destroy index file
     TabMeta &tab = db_.get_table(tab_name);
+    context->lock_mgr_->LockExclusiveOnTable(context->txn_,fhs_[tab_name].get()->GetFd());
     rm_manager_->close_file(fhs_[tab_name].get());
     rm_manager_->destroy_file(tab_name);
     int cnt=0;
@@ -199,6 +200,7 @@ void SmManager::create_index(const std::string &tab_name, const std::string &col
     if (col->index) {
         throw IndexExistsError(tab_name, col_name);
     }
+    context->lock_mgr_->LockExclusiveOnTable(context->txn_,fhs_[tab_name].get()->GetFd());
     // Create index file
     int col_idx = col - tab.cols.begin();
     ix_manager_->create_index(tab_name, col_idx, col->type, col->len);  // 这里调用了
@@ -228,10 +230,61 @@ void SmManager::drop_index(const std::string &tab_name, const std::string &col_n
     if (!col->index) {
         throw IndexNotFoundError(tab_name, col_name);
     }
+    context->lock_mgr_->LockExclusiveOnTable(context->txn_,fhs_[tab_name].get()->GetFd());
     int col_idx = col - tab.cols.begin();
     auto index_name = ix_manager_->get_index_name(tab_name, col_idx);
     ix_manager_->close_index(ihs_.at(index_name).get());
     ix_manager_->destroy_index(tab_name, col_idx);
     ihs_.erase(index_name);
     col->index = false;
+}
+void SmManager::rollback_insert(const std::string &tab_name, const Rid &rid, Context *context){
+        auto rm_handler=fhs_[tab_name].get();
+        int cnt=0;
+        auto tb=db_.get_table(tab_name);
+        for(auto col:tb.cols){
+            if(col.index){
+                auto idx_handler=ihs_[get_ix_manager()->get_index_name(tab_name,cnt)].get();
+                auto record=rm_handler->get_record(rid,context);
+                auto key=record.get()->data+col.offset;
+                idx_handler->delete_entry(key,context->txn_);
+            }
+            cnt++;
+        }
+        rm_handler->delete_record(rid,context);
+}
+void SmManager::rollback_delete(const std::string &tab_name, const RmRecord &record, Context *context){
+        auto rm_handler=fhs_[tab_name].get();
+        int cnt=0;
+        auto rid=rm_handler->insert_record(record.data,context);
+        auto tb=db_.get_table(tab_name);
+        for(auto col:tb.cols){
+            if(col.index){
+                auto idx_handler=ihs_[get_ix_manager()->get_index_name(tab_name,cnt)].get();
+                auto key=record.data+col.offset;
+                idx_handler->insert_entry(key,rid,context->txn_);
+            }
+            cnt++;
+        }
+}
+
+void SmManager::rollback_update(const std::string &tab_name, const Rid &rid, const RmRecord &record, Context *context)
+{
+        auto rm_handler=fhs_[tab_name].get();
+        int cnt=0;
+
+        auto pre_record=rm_handler->get_record(rid,context).get();
+
+        auto tb=db_.get_table(tab_name);
+        for(auto col:tb.cols){
+            if(col.index){
+                auto idx_handler=ihs_[get_ix_manager()->get_index_name(tab_name,cnt)].get();
+                auto key=record.data+col.offset;
+                auto pre_key=pre_record->data+col.offset;
+                idx_handler->delete_entry(pre_key,context->txn_);
+                idx_handler->insert_entry(key,rid,context->txn_);
+            }
+            cnt++;
+        }
+        rm_handler->update_record(rid,record.data,context);
 }

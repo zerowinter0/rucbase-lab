@@ -12,7 +12,6 @@ enum class Operation { FIND = 0, INSERT, DELETE };  // 三种操作：查找、�
 class IxIndexHandle {
     friend class IxScan;
     friend class IxManager;
-
    private:
     DiskManager *disk_manager_;
     BufferPoolManager *buffer_pool_manager_;
@@ -20,6 +19,7 @@ class IxIndexHandle {
     IxFileHdr file_hdr_;  // 存了root_page，但root_page初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
     std::shared_mutex root_latch_;  // 用于索引并发（请自行选择并发粒度在 Tree级 或 Page级 ）
     std::unordered_map<page_id_t,std::shared_mutex*> lock_map;
+    //radix_node* radix_tree_root;
    public:
     IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd);
 
@@ -50,6 +50,7 @@ class IxIndexHandle {
     void check_whole_tree();
     void print_node(int page_no);
     bool correct_whole_tree();
+    bool check_exist(char* key);
     // 辅助函数，lab3执行层将使用
     Iid lower_bound(const char *key);
 
@@ -81,4 +82,10 @@ class IxIndexHandle {
 
     // for index test
     Rid get_rid(const Iid &iid) const;
+};
+
+class radix_node{
+    public:
+    bool end_status=false;
+    radix_node* next_[256];
 };

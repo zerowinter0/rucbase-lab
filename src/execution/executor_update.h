@@ -54,6 +54,9 @@ class UpdateExecutor : public AbstractExecutor {
             auto rec = fh_->get_record(rid, context_);
             // lab3 task3 Todo
             // Remove old entry from index
+                WriteRecord* writerecord=new WriteRecord(WType::UPDATE_TUPLE,tab_name_,rid,*rec.get());
+                context_->txn_->AppendWriteRecord(writerecord);
+
             for(int i=0;i<tab_.cols.size();i++){
                 if(!ihs[i])continue;
                 ihs[i]->delete_entry(rec->data+tab_.cols[i].offset,nullptr);

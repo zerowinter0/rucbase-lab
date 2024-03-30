@@ -3,6 +3,24 @@
 #include "ix_scan.h"
 //#define Tree_level_lock 1
 #define Page_level_lock 1
+// bool IxIndexHandle:: check_exist(char* key){
+//     int len=file_hdr_.col_len;
+//     if(file_hdr_.col_type==ColType::TYPE_FLOAT){
+//         len=sizeof(float)/sizeof(char);
+//     }
+//     else if(file_hdr_.col_type==ColType::TYPE_FLOAT){
+//         len=sizeof(float)/sizeof(char);
+//     }
+//     radix_node* now=radix_tree_root;
+//     for(int i=0;i<len;i++){
+//         if(!now->next_[i]){
+//             return false;
+//         }
+//         now=now->next_[i];
+//     }
+//     if(now->end_status)return true;
+//     return false;
+// }
 IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
     : disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager), fd_(fd) {
     // init file_hdr_

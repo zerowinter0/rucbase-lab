@@ -50,6 +50,8 @@ class InsertExecutor : public AbstractExecutor {
                 ix_file_handle->insert_entry(values_[i].raw->data,rid_,nullptr);
             }
         }
+        WriteRecord* writerecord=new WriteRecord(WType::INSERT_TUPLE,tab_name_,rid_);
+        context_->txn_->AppendWriteRecord(writerecord);
         // lab3 task3 Todo end
         return rmRecord;
     }

@@ -42,11 +42,14 @@ class DeleteExecutor : public AbstractExecutor {
             // lab3 task3 Todo
             // Delete from index file
             // Delete from record file
+                WriteRecord* writerecord=new WriteRecord(WType::DELETE_TUPLE,tab_name_,*rec.get());
+                context_->txn_->AppendWriteRecord(writerecord);
             for(int i=0;i<tab_.cols.size();i++){
                 if(!ihs[i])continue;
                 ihs[i]->delete_entry(rec->data+tab_.cols[i].offset,nullptr);
             }
             fh_->delete_record(rid,context_);
+            
             // lab3 task3 Todo end
 
             // record a delete operation into the transaction

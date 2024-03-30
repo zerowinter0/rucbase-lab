@@ -97,17 +97,19 @@ void QlManager::insert_into(const std::string &tab_name, std::vector<Value> valu
     // lab3 task3 Todo
     // make InsertExecutor
     // call InsertExecutor.Next()
+    context->lock_mgr_->LockIXOnTable(context->txn_,sm_manager_->fhs_[tab_name].get()->GetFd());
     TabMeta &tab = sm_manager_->db_.get_table(tab_name);
     for(int i=0;i<values.size();i++){
         values[i].init_raw(tab.cols[i].len);
     }
     std::unique_ptr<AbstractExecutor> insertExecutor(new InsertExecutor(sm_manager_,tab_name,values,context));
-    insertExecutor->Next();
+    insertExecutor->Next().get();
     // lab3 task3 Todo end
 }
 
 void QlManager::delete_from(const std::string &tab_name, std::vector<Condition> conds, Context *context) {
     // Parse where clause
+    context->lock_mgr_->LockIXOnTable(context->txn_,sm_manager_->fhs_[tab_name].get()->GetFd());
     conds = check_where_clause({tab_name}, conds);
     // Get all RID to delete
     std::vector<Rid> rids;
@@ -126,6 +128,7 @@ void QlManager::delete_from(const std::string &tab_name, std::vector<Condition> 
     // lab3 task3 Todo end
 
     for (scanExecutor->beginTuple(); !scanExecutor->is_end(); scanExecutor->nextTuple()) {
+        context->lock_mgr_->LockExclusiveOnRecord(context->txn_,scanExecutor->rid(),sm_manager_->fhs_[tab_name].get()->GetFd());
         rids.push_back(scanExecutor->rid());
     }
 
@@ -133,13 +136,14 @@ void QlManager::delete_from(const std::string &tab_name, std::vector<Condition> 
     // make deleteExecutor
     // call deleteExecutor.Next()
     auto deleteExecutor=new DeleteExecutor(sm_manager_,tab_name,conds,rids,context);
-    deleteExecutor->Next();
+    deleteExecutor->Next().get();
     // lab3 task3 Todo end
 }
 
 void QlManager::update_set(const std::string &tab_name, std::vector<SetClause> set_clauses,
                            std::vector<Condition> conds, Context *context) {
     TabMeta &tab = sm_manager_->db_.get_table(tab_name);
+    context->lock_mgr_->LockIXOnTable(context->txn_,sm_manager_->fhs_[tab_name].get()->GetFd());
     // Parse where clause
     conds = check_where_clause({tab_name}, conds);
     // Get raw values in set clause
@@ -168,6 +172,7 @@ void QlManager::update_set(const std::string &tab_name, std::vector<SetClause> s
         scanExecutor=std::make_unique<SeqScanExecutor>(sm_manager_,tab_name,conds,context);
     }
     for (scanExecutor->beginTuple(); !scanExecutor->is_end(); scanExecutor->nextTuple()) {
+        context->lock_mgr_->LockExclusiveOnRecord(context->txn_,scanExecutor->rid(),sm_manager_->fhs_[tab_name].get()->GetFd());
         rids.push_back(scanExecutor->rid());
     }
     auto updateExecutor=new UpdateExecutor(sm_manager_,tab_name,set_clauses,conds,rids,context);
@@ -209,6 +214,8 @@ std::vector<Condition> pop_conds(std::vector<Condition> &conds, const std::vecto
 void QlManager::select_from(std::vector<TabCol> sel_cols, const std::vector<std::string> &tab_names,
                             std::vector<Condition> conds, Context *context) {
     // Parse selector
+    //for(auto tab_name:tab_names)
+        //context->lock_mgr_->LockISOnTable(context->txn_,sm_manager_->fhs_[tab_name].get()->GetFd());
     auto all_cols = get_all_cols(tab_names);
     if (sel_cols.empty()) {
         // select all columns
